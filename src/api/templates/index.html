@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}Главная страница{% endblock %}
+
+{% block content %}
+<div class="jumbotron">
+    <h1 class="display-4">Система управления салоном красоты</h1>
+    <p class="lead">Добро пожаловать в панель администратора салона красоты. Здесь вы можете управлять мастерами, услугами, рабочими местами, рабочими часами и записями клиентов.</p>
+    <hr class="my-4">
+    <p>Выберите раздел из меню выше для начала работы.</p>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Статистика</h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Мастеров
+                        <span class="badge bg-primary rounded-pill">{{ masters|length }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Услуг
+                        <span class="badge bg-primary rounded-pill">{{ procedures|length }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Рабочих мест
+                        <span class="badge bg-primary rounded-pill">{{ workplaces|length }}</span>
+                    </li>
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        Активных записей
+                        <span class="badge bg-success rounded-pill">{{ active_appointments }}</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Записи на сегодня</h5>
+            </div>
+            <div class="card-body">
+                {% if today_appointments %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Время</th>
+                                <th>Клиент</th>
+                                <th>Мастер</th>
+                                <th>Услуги</th>
+                                <th>Статус</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for appointment in today_appointments %}
+                            <tr class="{% if appointment.status == 'active' %}table-success{% elif appointment.status == 'canceled' %}table-danger{% endif %}">
+                                <td>{{ appointment.start_time.strftime('%H:%M') }} - {{ appointment.end_time.strftime('%H:%M') }}</td>
+                                <td>
+                                    {% for client in clients %}
+                                        {% if client.id == appointment.client_id %}
+                                            {{ client.name }}
+                                        {% endif %}
+                                    {% endfor %}
+                                </td>
+                                <td>
+                                    {% for master in masters %}
+                                        {% if master.id == appointment.master_id %}
+                                            {{ master.name }}
+                                        {% endif %}
+                                    {% endfor %}
+                                </td>
+                                <td>
+                                    {% for proc_id in appointment.procedures %}
+                                        {% for proc in procedures %}
+                                            {% if proc.id == proc_id %}
+                                                {{ proc.name }}{% if not loop.last %}, {% endif %}
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% endfor %}
+                                </td>
+                                <td>
+                                    {% if appointment.status == 'active' %}
+                                        <span class="badge bg-success">Активная</span>
+                                    {% elif appointment.status == 'completed' %}
+                                        <span class="badge bg-secondary">Завершена</span>
+                                    {% elif appointment.status == 'canceled' %}
+                                        <span class="badge bg-danger">Отменена</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-center">На сегодня нет записей.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

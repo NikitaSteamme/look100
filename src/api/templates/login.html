@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Вход в систему</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            display: flex;
+            align-items: center;
+            padding-top: 40px;
+            padding-bottom: 40px;
+            background-color: #f5f5f5;
+            height: 100vh;
+        }
+        .form-signin {
+            width: 100%;
+            max-width: 330px;
+            padding: 15px;
+            margin: auto;
+        }
+        .form-signin .form-floating:focus-within {
+            z-index: 2;
+        }
+        .form-signin input[type="text"] {
+            margin-bottom: -1px;
+            border-bottom-right-radius: 0;
+            border-bottom-left-radius: 0;
+        }
+        .form-signin input[type="password"] {
+            margin-bottom: 10px;
+            border-top-left-radius: 0;
+            border-top-right-radius: 0;
+        }
+    </style>
+</head>
+<body class="text-center">
+    <main class="form-signin">
+        <form id="login-form">
+            <h1 class="h3 mb-3 fw-normal">Вход в систему управления</h1>
+            
+            <div class="form-floating">
+                <input type="text" class="form-control" id="username" placeholder="Имя пользователя" required>
+                <label for="username">Имя пользователя</label>
+            </div>
+            <div class="form-floating">
+                <input type="password" class="form-control" id="password" placeholder="Пароль" required>
+                <label for="password">Пароль</label>
+            </div>
+            
+            <div class="alert alert-danger d-none" id="error-message"></div>
+            
+            <button class="w-100 btn btn-lg btn-primary" type="submit">Войти</button>
+            <p class="mt-5 mb-3 text-muted">&copy; 2025 Салон красоты</p>
+        </form>
+    </main>
+    
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            $('#login-form').submit(function(e) {
+                e.preventDefault();
+                
+                const username = $('#username').val();
+                const password = $('#password').val();
+                
+                $.ajax({
+                    url: '/token',
+                    type: 'POST',
+                    contentType: 'application/x-www-form-urlencoded',
+                    data: `username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`,
+                    success: function(response) {
+                        // Проверяем новый формат ответа API
+                        const tokenData = response.data ? response.data : response;
+                        
+                        // Сохранение токена в localStorage
+                        localStorage.setItem('token', tokenData.access_token);
+                        
+                        // Перенаправление на главную страницу
+                        window.location.href = '/admin/sections';
+                    },
+                    error: function(xhr) {
+                        // Отображение ошибки
+                        let errorMessage = 'Неверное имя пользователя или пароль';
+                        
+                        try {
+                            const response = JSON.parse(xhr.responseText);
+                            if (response.message) {
+                                errorMessage = response.message;
+                            } else if (response.errors && response.errors.length > 0) {
+                                errorMessage = response.errors[0].detail || errorMessage;
+                            }
+                        } catch (e) {
+                            // Используем стандартное сообщение об ошибке
+                        }
+                        
+                        $('#error-message').text(errorMessage).removeClass('d-none');
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

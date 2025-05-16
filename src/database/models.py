@@ -15,13 +15,12 @@ class Client(Base):
     __tablename__ = "client"
 
     id = Column(Integer, primary_key=True, index=True)
-    telegram_id = Column(Integer, unique=True, nullable=False)
+    telegram_id = Column(String(100), nullable=True)
     name = Column(String(100), nullable=False)
     phone = Column(String(20), nullable=True)
     email = Column(String(100), nullable=True)
-    lang = Column(String(5), default="UKR")
-    time_coeff = Column(Float, default=1.0)
-    is_first_visit = Column(Boolean, default=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
 
     appointments = relationship("Appointment", back_populates="client")
 
@@ -43,6 +42,7 @@ class SectionTranslation(Base):
     section_id = Column(Integer, ForeignKey("section.id", ondelete="CASCADE"))
     lang = Column(String(5), nullable=False)
     name = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
 
     section = relationship("Section", back_populates="translations")
 

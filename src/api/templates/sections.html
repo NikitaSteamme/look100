@@ -1,0 +1,375 @@
+{% extends "base.html" %}
+
+{% block title %}Управление разделами услуг{% endblock %}
+
+{% block content %}
+<h1>Управление разделами услуг</h1>
+
+<div class="card mb-4">
+    <div class="card-header">
+        <h5 class="mb-0">Добавить новый раздел</h5>
+    </div>
+    <div class="card-body">
+        <form id="add-section-form">
+            <div class="form-group mb-3">
+                <label for="name_ukr">Название (Украинский)</label>
+                <input type="text" class="form-control" id="name_ukr" name="name_ukr" required>
+            </div>
+            <div class="form-group mb-3">
+                <label for="description_ukr">Описание (Украинский)</label>
+                <textarea class="form-control" id="description_ukr" name="description_ukr"></textarea>
+            </div>
+            <div class="form-group mb-3">
+                <label for="name_eng">Название (Английский)</label>
+                <input type="text" class="form-control" id="name_eng" name="name_eng">
+            </div>
+            <div class="form-group mb-3">
+                <label for="description_eng">Описание (Английский)</label>
+                <textarea class="form-control" id="description_eng" name="description_eng"></textarea>
+            </div>
+            <div class="form-group mb-3">
+                <label for="name_por">Название (Португальский)</label>
+                <input type="text" class="form-control" id="name_por" name="name_por">
+            </div>
+            <div class="form-group mb-3">
+                <label for="description_por">Описание (Португальский)</label>
+                <textarea class="form-control" id="description_por" name="description_por"></textarea>
+            </div>
+            <div class="form-group mb-3">
+                <label for="name_rus">Название (Русский)</label>
+                <input type="text" class="form-control" id="name_rus" name="name_rus">
+            </div>
+            <div class="form-group mb-3">
+                <label for="description_rus">Описание (Русский)</label>
+                <textarea class="form-control" id="description_rus" name="description_rus"></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary">Добавить раздел</button>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0">Список разделов</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Название (Укр)</th>
+                        <th>Название (Англ)</th>
+                        <th>Название (Порт)</th>
+                        <th>Название (Рус)</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody id="sections-table">
+                    {% for section in sections %}
+                    <tr>
+                        <td>{{ section.id }}</td>
+                        <td>{{ section.translations | selectattr('lang', 'eq', 'UKR') | map(attribute='name') | first | default('-') }}</td>
+                        <td>{{ section.translations | selectattr('lang', 'eq', 'ENG') | map(attribute='name') | first | default('-') }}</td>
+                        <td>{{ section.translations | selectattr('lang', 'eq', 'POR') | map(attribute='name') | first | default('-') }}</td>
+                        <td>{{ section.translations | selectattr('lang', 'eq', 'RUS') | map(attribute='name') | first | default('-') }}</td>
+                        <td>
+                            <button class="btn btn-sm btn-primary edit-section" data-id="{{ section.id }}">Редактировать</button>
+                            <button class="btn btn-sm btn-danger delete-section" data-id="{{ section.id }}">Удалить</button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно для редактирования раздела -->
+<div class="modal fade" id="edit-section-modal" tabindex="-1" aria-labelledby="editSectionModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editSectionModalLabel">Редактировать раздел</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="edit-section-form">
+                    <input type="hidden" id="edit_section_id">
+                    <div class="form-group mb-3">
+                        <label for="edit_name_ukr">Название (Украинский)</label>
+                        <input type="text" class="form-control" id="edit_name_ukr" name="edit_name_ukr" required>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label for="edit_description_ukr">Описание (Украинский)</label>
+                        <textarea class="form-control" id="edit_description_ukr" name="edit_description_ukr"></textarea>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label for="edit_name_eng">Название (Английский)</label>
+                        <input type="text" class="form-control" id="edit_name_eng" name="edit_name_eng">
+                    </div>
+                    <div class="form-group mb-3">
+                        <label for="edit_description_eng">Описание (Английский)</label>
+                        <textarea class="form-control" id="edit_description_eng" name="edit_description_eng"></textarea>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label for="edit_name_por">Название (Португальский)</label>
+                        <input type="text" class="form-control" id="edit_name_por" name="edit_name_por">
+                    </div>
+                    <div class="form-group mb-3">
+                        <label for="edit_description_por">Описание (Португальский)</label>
+                        <textarea class="form-control" id="edit_description_por" name="edit_description_por"></textarea>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label for="edit_name_rus">Название (Русский)</label>
+                        <input type="text" class="form-control" id="edit_name_rus" name="edit_name_rus">
+                    </div>
+                    <div class="form-group mb-3">
+                        <label for="edit_description_rus">Описание (Русский)</label>
+                        <textarea class="form-control" id="edit_description_rus" name="edit_description_rus"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-primary" id="save-section-changes">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+    $(document).ready(function() {
+        // Добавление нового раздела
+        $('#add-section-form').submit(function(e) {
+            e.preventDefault();
+            
+            const sectionData = {
+                name_ukr: $('#name_ukr').val(),
+                description_ukr: $('#description_ukr').val(),
+                name_eng: $('#name_eng').val(),
+                description_eng: $('#description_eng').val(),
+                name_por: $('#name_por').val(),
+                description_por: $('#description_por').val(),
+                name_rus: $('#name_rus').val(),
+                description_rus: $('#description_rus').val()
+            };
+            
+            $.ajax({
+                url: '/api/v2/sections/',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    translations: [
+                        {
+                            lang: "UKR",
+                            name: sectionData.name_ukr,
+                            description: sectionData.description_ukr
+                        },
+                        {
+                            lang: "ENG",
+                            name: sectionData.name_eng,
+                            description: sectionData.description_eng
+                        },
+                        {
+                            lang: "POR",
+                            name: sectionData.name_por,
+                            description: sectionData.description_por
+                        },
+                        {
+                            lang: "RUS",
+                            name: sectionData.name_rus,
+                            description: sectionData.description_rus
+                        }
+                    ]
+                }),
+                beforeSend: function(xhr) {
+                    xhr.setRequestHeader('Authorization', 'Bearer ' + localStorage.getItem('token'));
+                },
+                success: function(response) {
+                    // Проверяем новый формат ответа API
+                    const message = response.message || 'Раздел успешно добавлен!';
+                    alert(message);
+                    $('#add-section-form')[0].reset();
+                    location.reload();
+                },
+                error: function(xhr) {
+                    let errorMessage = 'Ошибка при добавлении раздела';
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        if (response.message) {
+                            errorMessage = response.message;
+                        } else if (response.errors && response.errors.length > 0) {
+                            errorMessage = response.errors[0].detail || errorMessage;
+                        }
+                    } catch (e) {
+                        errorMessage += ': ' + xhr.responseText;
+                    }
+                    alert(errorMessage);
+                }
+            });
+        });
+        
+        // Открытие модального окна для редактирования
+        $('.edit-section').click(function() {
+            const sectionId = $(this).data('id');
+            $('#edit_section_id').val(sectionId);
+            
+            $.ajax({
+                url: `/api/v2/sections/${sectionId}`,
+                type: 'GET',
+                beforeSend: function(xhr) {
+                    xhr.setRequestHeader('Authorization', 'Bearer ' + localStorage.getItem('token'));
+                },
+                success: function(response) {
+                    // Проверяем новый формат ответа API
+                    const section = response.data ? response.data : response;
+                    
+                    // Функция для получения перевода по языку
+                    function getTranslation(lang) {
+                        return section.translations.find(t => t.lang === lang) || {};
+                    }
+                    
+                    // Заполнение формы данными раздела
+                    const ukrTrans = getTranslation('UKR');
+                    const engTrans = getTranslation('ENG');
+                    const porTrans = getTranslation('POR');
+                    const rusTrans = getTranslation('RUS');
+                    
+                    $('#edit_name_ukr').val(ukrTrans.name || '');
+                    $('#edit_description_ukr').val(ukrTrans.description || '');
+                    $('#edit_name_eng').val(engTrans.name || '');
+                    $('#edit_description_eng').val(engTrans.description || '');
+                    $('#edit_name_por').val(porTrans.name || '');
+                    $('#edit_description_por').val(porTrans.description || '');
+                    $('#edit_name_rus').val(rusTrans.name || '');
+                    $('#edit_description_rus').val(rusTrans.description || '');
+                    
+                    // Открытие модального окна
+                    $('#edit-section-modal').modal('show');
+                },
+                error: function(xhr) {
+                    let errorMessage = 'Ошибка при получении данных раздела';
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        if (response.message) {
+                            errorMessage = response.message;
+                        } else if (response.errors && response.errors.length > 0) {
+                            errorMessage = response.errors[0].detail || errorMessage;
+                        }
+                    } catch (e) {
+                        errorMessage += ': ' + xhr.responseText;
+                    }
+                    alert(errorMessage);
+                }
+            });
+        });
+        
+        // Сохранение изменений раздела
+        $('#save-section-changes').click(function() {
+            const sectionId = $('#edit_section_id').val();
+            
+            const sectionData = {
+                name_ukr: $('#edit_name_ukr').val(),
+                description_ukr: $('#edit_description_ukr').val(),
+                name_eng: $('#edit_name_eng').val(),
+                description_eng: $('#edit_description_eng').val(),
+                name_por: $('#edit_name_por').val(),
+                description_por: $('#edit_description_por').val(),
+                name_rus: $('#edit_name_rus').val(),
+                description_rus: $('#edit_description_rus').val()
+            };
+            
+            $.ajax({
+                url: `/api/v2/sections/${sectionId}`,
+                type: 'PUT',
+                contentType: 'application/json',
+                data: JSON.stringify({
+                    translations: [
+                        {
+                            lang: "UKR",
+                            name: sectionData.name_ukr,
+                            description: sectionData.description_ukr
+                        },
+                        {
+                            lang: "ENG",
+                            name: sectionData.name_eng,
+                            description: sectionData.description_eng
+                        },
+                        {
+                            lang: "POR",
+                            name: sectionData.name_por,
+                            description: sectionData.description_por
+                        },
+                        {
+                            lang: "RUS",
+                            name: sectionData.name_rus,
+                            description: sectionData.description_rus
+                        }
+                    ]
+                }),
+                beforeSend: function(xhr) {
+                    xhr.setRequestHeader('Authorization', 'Bearer ' + localStorage.getItem('token'));
+                },
+                success: function(response) {
+                    // Проверяем новый формат ответа API
+                    const message = response.message || 'Раздел успешно обновлен!';
+                    alert(message);
+                    $('#edit-section-modal').modal('hide');
+                    location.reload();
+                },
+                error: function(xhr) {
+                    let errorMessage = 'Ошибка при обновлении раздела';
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        if (response.message) {
+                            errorMessage = response.message;
+                        } else if (response.errors && response.errors.length > 0) {
+                            errorMessage = response.errors[0].detail || errorMessage;
+                        }
+                    } catch (e) {
+                        errorMessage += ': ' + xhr.responseText;
+                    }
+                    alert(errorMessage);
+                }
+            });
+        });
+        
+        // Удаление раздела
+        $('.delete-section').click(function() {
+            if (confirm('Вы уверены, что хотите удалить этот раздел? Это также удалит все услуги в этом разделе!')) {
+                const sectionId = $(this).data('id');
+                
+                $.ajax({
+                    url: `/api/v2/sections/${sectionId}`,
+                    type: 'DELETE',
+                    beforeSend: function(xhr) {
+                        xhr.setRequestHeader('Authorization', 'Bearer ' + localStorage.getItem('token'));
+                    },
+                    success: function(response) {
+                        // Проверяем новый формат ответа API
+                        const message = response.message || 'Раздел успешно удален!';
+                        alert(message);
+                        location.reload();
+                    },
+                    error: function(xhr) {
+                        let errorMessage = 'Ошибка при удалении раздела';
+                        try {
+                            const response = JSON.parse(xhr.responseText);
+                            if (response.message) {
+                                errorMessage = response.message;
+                            } else if (response.errors && response.errors.length > 0) {
+                                errorMessage = response.errors[0].detail || errorMessage;
+                            }
+                        } catch (e) {
+                            errorMessage += ': ' + xhr.responseText;
+                        }
+                        alert(errorMessage);
+                    }
+                });
+            }
+        });
+    });
+</script>
+{% endblock %}

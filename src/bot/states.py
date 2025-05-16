@@ -4,6 +4,8 @@ from aiogram.fsm.state import State, StatesGroup
 class ClientStates(StatesGroup):
     """States for client flow"""
     language_selection = State()
+    registration_name = State()
+    registration_phone = State()
     section_selection = State()
     procedure_selection = State()
     master_or_time_selection = State()
@@ -23,6 +25,7 @@ class AdminStates(StatesGroup):
     workplace_management = State()
     workplace_create = State()
     workplace_edit = State()
+    workplace_edit_name = State()
     workplace_delete = State()
     
     # Work slot management
@@ -30,6 +33,8 @@ class AdminStates(StatesGroup):
     workslot_create_select_master = State()
     workslot_create_select_workplace = State()
     workslot_create_select_date = State()
+    workslot_create_select_start_time = State()
+    workslot_create_select_end_time = State()
     workslot_create_select_time = State()
     workslot_delete = State()
     
@@ -37,6 +42,7 @@ class AdminStates(StatesGroup):
     appointment_management = State()
     appointment_view_by_date = State()
     appointment_delete = State()
+    appointment_details = State()
     
     # Manual appointment creation
     manual_appointment_search_client = State()

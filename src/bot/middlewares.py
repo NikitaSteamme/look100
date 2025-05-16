@@ -1,5 +1,4 @@
-from aiogram import Dispatcher
-from aiogram.dispatcher.middlewares import BaseMiddleware
+from aiogram import Dispatcher, BaseMiddleware
 from aiogram.types import TelegramObject
 from typing import Any, Awaitable, Callable, Dict
 from sqlalchemy.ext.asyncio import AsyncSession

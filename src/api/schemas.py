@@ -21,27 +21,24 @@ class ClientBase(BaseModel):
     name: str
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
-    lang: LanguageEnum = LanguageEnum.UKR
-    time_coeff: float = 1.0
-    is_first_visit: bool = True
+    telegram_id: Optional[str] = None
 
 
 class ClientCreate(ClientBase):
-    telegram_id: int
+    pass
 
 
 class ClientUpdate(ClientBase):
     name: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
-    lang: Optional[LanguageEnum] = None
-    time_coeff: Optional[float] = None
-    is_first_visit: Optional[bool] = None
+    telegram_id: Optional[str] = None
 
 
 class ClientResponse(ClientBase):
     id: int
-    telegram_id: int
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     class Config:
         orm_mode = True
