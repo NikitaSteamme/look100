@@ -8,7 +8,7 @@ from sqlalchemy.orm import joinedload
 from sqlalchemy.sql.expression import text
 from sqlalchemy.exc import SQLAlchemyError
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from .models import (
     Section, SectionTranslation, 
@@ -994,18 +994,20 @@ async def delete_work_slot(db: AsyncSession, work_slot_id: int) -> bool:
         if not work_slot:
             return False
         
-        # Проверяем, есть ли связанные записи
+        # Проверяем, есть ли связанные активные записи
         appointments_query = select(func.count()).select_from(Appointment).where(
             and_(
                 Appointment.master_id == work_slot.master_id,
                 Appointment.start_time >= work_slot.start_time,
-                Appointment.end_time <= work_slot.end_time
+                Appointment.end_time <= work_slot.end_time,
+                # Только активные записи (не отмененные и не завершенные)
+                Appointment.status.notin_(["canceled", "completed"])
             )
         )
         appointments_count = await db.scalar(appointments_query)
         
         if appointments_count > 0:
-            logger.error(f"Cannot delete work slot with ID {work_slot_id} because it has associated appointments")
+            logger.error(f"Cannot delete work slot with ID {work_slot_id} because it has associated active appointments")
             return False
         
         # Удаляем рабочий слот
@@ -1219,14 +1221,37 @@ async def delete_master(db: AsyncSession, master_id: int) -> bool:
         master = result.scalars().first()
         
         if not master:
+            logger.error(f"Master with ID {master_id} not found")
             return False
         
-        # Проверка на связанные записи
-        appointments_query = select(func.count()).select_from(Appointment).where(Appointment.master_id == master_id)
+        # Проверка на связанные активные записи
+        current_time = datetime.now()
+        appointments_query = select(func.count()).select_from(Appointment).where(
+            and_(
+                Appointment.master_id == master_id,
+                Appointment.start_time >= current_time,
+                Appointment.status.notin_(["canceled", "completed"])
+            )
+        )
         appointments_count = await db.scalar(appointments_query)
         
         if appointments_count > 0:
-            # Если есть связанные записи, не удаляем мастера
+            # Если есть связанные активные записи в будущем, не удаляем мастера
+            logger.error(f"Cannot delete master with ID {master_id} because it has associated active appointments in the future")
+            return False
+        
+        # Проверка на рабочее время в будущем или сейчас
+        work_slots_query = select(func.count()).select_from(WorkSlot).where(
+            and_(
+                WorkSlot.master_id == master_id,
+                WorkSlot.end_time >= current_time
+            )
+        )
+        work_slots_count = await db.scalar(work_slots_query)
+        
+        if work_slots_count > 0:
+            # Если есть рабочее время в будущем или сейчас, не удаляем мастера
+            logger.error(f"Cannot delete master with ID {master_id} because it has work slots in the future or now")
             return False
         
         # Удаляем связи с процедурами
@@ -1236,6 +1261,7 @@ async def delete_master(db: AsyncSession, master_id: int) -> bool:
         # Удаляем мастера
         await db.delete(master)
         await db.commit()
+        logger.info(f"Master with ID {master_id} successfully deleted")
         return True
     except SQLAlchemyError as e:
         logger.error(f"Error in delete_master: {e}")
@@ -1260,6 +1286,9 @@ async def get_clients(db: AsyncSession) -> List[Dict[str, Any]]:
                 "phone": client.phone,
                 "email": client.email,
                 "telegram_id": client.telegram_id,
+                "lang": client.lang,
+                "time_coeff": client.time_coeff,
+                "is_first_visit": client.is_first_visit,
                 "created_at": client.created_at,
                 "updated_at": client.updated_at
             }
@@ -1302,11 +1331,12 @@ async def get_client_by_telegram_id(db: AsyncSession, telegram_id: str) -> Optio
     Получение клиента по Telegram ID
     """
     try:
-        query = select(Client).where(Client.telegram_id == telegram_id)
+        query = select(Client).where(Client.telegram_id == str(telegram_id))
         result = await db.execute(query)
         client = result.scalars().first()
         
         if not client:
+            logger.info(f"Client with telegram_id {telegram_id} not found")
             return None
         
         client_dict = {
@@ -1315,6 +1345,9 @@ async def get_client_by_telegram_id(db: AsyncSession, telegram_id: str) -> Optio
             "phone": client.phone,
             "email": client.email,
             "telegram_id": client.telegram_id,
+            "lang": client.lang,
+            "time_coeff": client.time_coeff,
+            "is_first_visit": client.is_first_visit,
             "created_at": client.created_at,
             "updated_at": client.updated_at
         }
@@ -1344,7 +1377,10 @@ async def create_client(db: AsyncSession, client_data: Dict[str, Any]) -> Option
             name=client_data.get("name", ""),
             phone=client_data.get("phone", "") or "",
             email=client_data.get("email", "") or "",
-            telegram_id=client_data.get("telegram_id", "") or ""
+            telegram_id=client_data.get("telegram_id", "") or "",
+            lang=client_data.get("lang", "ru"),
+            time_coeff=client_data.get("time_coeff", 1.0),
+            is_first_visit=client_data.get("is_first_visit", True)
         )
         
         db.add(new_client)
@@ -1719,6 +1755,216 @@ async def delete_appointment(db: AsyncSession, appointment_id: int) -> bool:
         await db.rollback()
         return False
 
+# Функция для расчета продолжительности приема
+async def calculate_appointment_duration(db: AsyncSession, procedure_ids: List[int], time_coeff: float = 1.0, is_first_visit: bool = False) -> int:
+    """
+    Расчет продолжительности приема на основе выбранных процедур
+    
+    Args:
+        db: Сессия базы данных
+        procedure_ids: Список ID выбранных процедур
+        time_coeff: Коэффициент времени для клиента (опытный клиент может требовать меньше времени)
+        is_first_visit: Первый ли визит клиента (первый визит может требовать больше времени)
+        
+    Returns:
+        Продолжительность приема в минутах
+    """
+    try:
+        # Базовая продолжительность для первого визита
+        base_duration = 15 if is_first_visit else 0
+        
+        # Если нет выбранных процедур, возвращаем минимальную продолжительность
+        if not procedure_ids:
+            return max(30, base_duration)
+        
+        # Получаем информацию о выбранных процедурах
+        query = select(Procedure).where(Procedure.id.in_(procedure_ids))
+        result = await db.execute(query)
+        procedures = result.scalars().all()
+        
+        # Рассчитываем общую продолжительность
+        total_duration = base_duration
+        for procedure in procedures:
+            # Используем duration из процедуры, если он есть, иначе используем значение по умолчанию
+            procedure_duration = getattr(procedure, 'duration', 30)
+            total_duration += procedure_duration
+        
+        # Применяем коэффициент времени клиента
+        adjusted_duration = int(total_duration * time_coeff)
+        
+        # Минимальная продолжительность - 30 минут
+        return max(30, adjusted_duration)
+    except SQLAlchemyError as e:
+        logger.error(f"Error in calculate_appointment_duration: {e}")
+        # В случае ошибки возвращаем значение по умолчанию
+        return 60
+
+# Функция для получения доступных дней для мастера
+async def get_available_days(db: AsyncSession, master_id: int, start_date: datetime, days_count: int = 30) -> List[datetime]:
+    """
+    Получение доступных дней для записи к мастеру
+    
+    Args:
+        db: Сессия базы данных
+        master_id: ID мастера
+        start_date: Начальная дата поиска
+        days_count: Количество дней для поиска
+        
+    Returns:
+        Список дат, в которые у мастера есть рабочее время
+    """
+    try:
+        end_date = start_date + timedelta(days=days_count)
+        
+        # Получаем рабочие слоты мастера на указанный период
+        query = (
+            select(WorkSlot)
+            .where(
+                WorkSlot.master_id == master_id,
+                WorkSlot.start_time >= start_date,
+                WorkSlot.start_time < end_date
+            )
+        )
+        result = await db.execute(query)
+        work_slots = result.scalars().all()
+        
+        # Группируем рабочие слоты по дням
+        available_days = set()
+        for slot in work_slots:
+            day = datetime(slot.start_time.year, slot.start_time.month, slot.start_time.day)
+            available_days.add(day)
+        
+        return sorted(list(available_days))
+    except SQLAlchemyError as e:
+        logger.error(f"Error in get_available_days: {e}")
+        return []
+
+# Функция для получения доступных слотов
+async def get_available_slots(db: AsyncSession, master_id: int, date: datetime, duration: int = 60) -> List[datetime]:
+    """
+    Получение доступных слотов для записи на основе мастера, даты и продолжительности процедуры
+    
+    Args:
+        db: Сессия базы данных
+        master_id: ID мастера
+        date: Дата, на которую ищем слоты
+        duration: Продолжительность процедуры в минутах
+        
+    Returns:
+        Список доступных временных слотов (datetime)
+    """
+    try:
+        # Функция для округления времени до ближайшей четверти часа в большую сторону
+        def round_up_to_quarter_hour(dt):
+            """Округляет время до ближайшей четверти часа в большую сторону"""
+            minutes = dt.minute
+            if minutes % 15 == 0:
+                return dt
+            return dt.replace(minute=((minutes // 15) + 1) * 15, second=0, microsecond=0)
+        
+        # Получаем рабочий день мастера
+        start_of_day = datetime(date.year, date.month, date.day, 0, 0, 0)
+        end_of_day = datetime(date.year, date.month, date.day, 23, 59, 59)
+        
+        # Получаем рабочие слоты мастера на указанную дату
+        query = (
+            select(WorkSlot)
+            .where(
+                WorkSlot.master_id == master_id,
+                WorkSlot.start_time >= start_of_day,
+                WorkSlot.end_time <= end_of_day
+            )
+            .order_by(WorkSlot.start_time)
+        )
+        result = await db.execute(query)
+        work_slots = result.scalars().all()
+        
+        if not work_slots:
+            return []
+        
+        # Получаем существующие записи мастера на указанную дату, отсортированные по времени начала
+        query = (
+            select(Appointment)
+            .where(
+                Appointment.master_id == master_id,
+                Appointment.start_time >= start_of_day,
+                Appointment.start_time <= end_of_day,
+                Appointment.status != "canceled"
+            )
+            .order_by(Appointment.start_time)
+        )
+        result = await db.execute(query)
+        appointments = result.scalars().all()
+        
+        # Создаем доступные слоты
+        available_slots = []
+        
+        for work_slot in work_slots:
+            # Создаем временную шкалу для этого рабочего слота
+            timeline = []
+            
+            # Добавляем существующие записи в временную шкалу
+            slot_appointments = [
+                a for a in appointments 
+                if a.start_time >= work_slot.start_time and a.start_time < work_slot.end_time
+            ]
+            
+            # Сортируем записи по времени начала
+            slot_appointments.sort(key=lambda a: a.start_time)
+            
+            # Генерируем доступные слоты с учетом существующих записей
+            current_time = work_slot.start_time
+            
+            # Обрабатываем каждую запись
+            for appointment in slot_appointments:
+                # Генерируем слоты до текущей записи
+                while current_time < appointment.start_time and current_time + timedelta(minutes=duration) <= appointment.start_time:
+                    # Проверяем, что слот удовлетворяет условиям
+                    if (
+                        # До конца рабочего времени не менее 1 часа
+                        current_time + timedelta(hours=1) <= work_slot.end_time and
+                        # Запись с учетом ее продолжительности не выходит за пределы рабочего времени
+                        current_time + timedelta(minutes=duration) <= work_slot.end_time
+                    ):
+                        available_slots.append(current_time)
+                    
+                    # Переходим к следующему часу
+                    current_time += timedelta(hours=1)
+                
+                # Получаем продолжительность записи
+                appointment_duration = getattr(appointment, 'duration', 60)  # По умолчанию 60 минут
+                
+                # Вычисляем время окончания записи + перерыв
+                appointment_end = appointment.start_time + timedelta(minutes=appointment_duration)
+                appointment_end_with_break = appointment_end + timedelta(minutes=15)
+                
+                # Округляем до ближайшей четверти часа в большую сторону
+                appointment_end_with_break = round_up_to_quarter_hour(appointment_end_with_break)
+                
+                # Устанавливаем текущее время на конец записи + перерыв
+                current_time = appointment_end_with_break
+            
+            # Генерируем слоты после последней записи до конца рабочего времени
+            while current_time + timedelta(minutes=duration) <= work_slot.end_time:
+                # Проверяем, что слот удовлетворяет условиям
+                if (
+                    # До конца рабочего времени не менее 1 часа
+                    current_time + timedelta(hours=1) <= work_slot.end_time and
+                    # Запись с учетом ее продолжительности не выходит за пределы рабочего времени
+                    current_time + timedelta(minutes=duration) <= work_slot.end_time
+                ):
+                    available_slots.append(current_time)
+                
+                # Переходим к следующему часу
+                current_time += timedelta(hours=1)
+        
+        # Удаляем дубликаты и сортируем слоты
+        available_slots = sorted(list(set(available_slots)))
+        
+        return available_slots
+    except SQLAlchemyError as e:
+        logger.error(f"Error in get_available_slots: {e}")
+        return []
 # Функция для добавления индексов в базу данных
 async def add_database_indexes(db: AsyncSession) -> None:
     """

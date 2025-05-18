@@ -30,6 +30,10 @@ class UserMiddleware(BaseMiddleware):
         event: TelegramObject,
         data: Dict[str, Any]
     ) -> Any:
+        # Initialize data['data'] if not exists
+        if 'data' not in data:
+            data['data'] = {}
+            
         # Check if we have user info in the event
         if hasattr(event, "from_user") and event.from_user:
             telegram_id = event.from_user.id
@@ -38,12 +42,18 @@ class UserMiddleware(BaseMiddleware):
             if session:
                 # Try to get client from database
                 client = await crud.get_client_by_telegram_id(session, telegram_id)
-                data["client"] = client
+                data["data"]["client"] = client
+                data["client"] = client  # Для обратной совместимости
                 
                 # Check if user is admin
                 admin = await crud.get_admin_by_telegram_id(session, telegram_id)
-                data["admin"] = admin
+                data["data"]["admin"] = admin
+                data["admin"] = admin  # Для обратной совместимости
         
+        # Ensure we have state in data
+        if 'state' not in data and 'state' in data.get('data', {}):
+            data['state'] = data['data']['state']
+            
         return await handler(event, data)
 
 

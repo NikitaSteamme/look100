@@ -10,6 +10,7 @@ class ClientStates(StatesGroup):
     procedure_selection = State()
     master_or_time_selection = State()
     master_selection = State()
+    day_selection = State()  # Новое состояние для выбора дня
     time_selection = State()
     appointment_confirmation = State()
     my_appointments = State()

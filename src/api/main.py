@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, update, delete, and_, or_, desc, asc, func
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
@@ -232,9 +232,16 @@ async def create_section(
         # Используем имя из первого перевода (обычно UKR) в качестве имени раздела
         ukr_translation = next((t for t in section.translations if t.lang == "UKR"), section.translations[0])
         section_data = {"name": ukr_translation.name}
-        translations = [t.dict() for t in section.translations]
         
-        section = await crud.create_section(db, {"name": section.translations[0].name}, section.translations)
+        # Преобразуем объекты SectionTranslationCreate в словари
+        translations = []
+        for t in section.translations:
+            translations.append({
+                "lang": t.lang,
+                "name": t.name
+            })
+        
+        section = await crud.create_section(db, {"name": ukr_translation.name}, translations)
         if section is None:
             raise HTTPException(status_code=500, detail="Failed to create section")
         
@@ -263,8 +270,15 @@ async def update_section(
         if not section.translations:
             raise HTTPException(status_code=400, detail="At least one translation is required")
         
-        translations = [t.dict() for t in section.translations]
-        section = await crud.update_section(db, section_id, section.translations)
+        # Преобразуем объекты SectionTranslationCreate в словари
+        translations = []
+        for t in section.translations:
+            translations.append({
+                "lang": t.lang,
+                "name": t.name
+            })
+        
+        section = await crud.update_section(db, section_id, translations)
         
         if section is None:
             raise HTTPException(status_code=404, detail=f"Section with ID {section_id} not found")
@@ -435,7 +449,7 @@ async def update_procedure(
         procedure_data = procedure.dict(exclude={"translations"})
         translations = [t.dict() for t in procedure.translations]
         
-        procedure = await crud.update_procedure(db, procedure_id, procedure_data, procedure.translations)
+        procedure = await crud.update_procedure(db, procedure_id, procedure_data, translations)
         
         if procedure is None:
             raise HTTPException(status_code=404, detail=f"Procedure with ID {procedure_id} not found")
@@ -1259,12 +1273,53 @@ async def delete_master(master_id: int, db: AsyncSession = Depends(get_db), curr
     Удаление мастера
     """
     try:
+        # Проверка на существование мастера
+        master = await crud.get_master_by_id(db, master_id)
+        if not master:
+            return APIResponse.error_response(
+                message=f"Master with ID {master_id} not found",
+                errors=[{"code": 404, "detail": "Master not found"}]
+            )
+        
+        # Проверка на рабочее время в будущем или сейчас
+        current_time = datetime.now()
+        work_slots_query = select(func.count()).select_from(WorkSlot).where(
+            and_(
+                WorkSlot.master_id == master_id,
+                WorkSlot.end_time >= current_time
+            )
+        )
+        work_slots_count = await db.scalar(work_slots_query)
+        
+        if work_slots_count > 0:
+            return APIResponse.error_response(
+                message=f"Cannot delete master with ID {master_id} because it has work slots in the future or now",
+                errors=[{"code": 400, "detail": "Master has work slots in the future or now"}]
+            )
+        
+        # Проверка на активные записи в будущем
+        appointments_query = select(func.count()).select_from(Appointment).where(
+            and_(
+                Appointment.master_id == master_id,
+                Appointment.start_time >= current_time,
+                Appointment.status.notin_(["canceled", "completed"])
+            )
+        )
+        appointments_count = await db.scalar(appointments_query)
+        
+        if appointments_count > 0:
+            return APIResponse.error_response(
+                message=f"Cannot delete master with ID {master_id} because it has active appointments in the future",
+                errors=[{"code": 400, "detail": "Master has active appointments in the future"}]
+            )
+        
+        # Если все проверки пройдены, удаляем мастера
         result = await crud.delete_master(db, master_id)
         
         if not result:
             return APIResponse.error_response(
-                message=f"Master with ID {master_id} not found or cannot be deleted",
-                errors=[{"code": 404, "detail": "Master not found or cannot be deleted"}]
+                message=f"Failed to delete master with ID {master_id}",
+                errors=[{"code": 500, "detail": "Failed to delete master"}]
             )
         
         return APIResponse.success_response(

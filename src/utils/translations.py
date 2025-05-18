@@ -42,6 +42,14 @@ TRANSLATIONS = {
         "RUS": "Вы не выбрали ни одной процедуры. Пожалуйста, выберите хотя бы одну процедуру."
     },
     
+    # Registration name required
+    "registration_name_required": {
+        "UKR": "Для продовження нам потрібно зареєструвати вас. Будь ласка, введіть ваше ім'я:",
+        "ENG": "To continue, we need to register you. Please enter your name:",
+        "POR": "Para continuar, precisamos registrá-lo. Por favor, digite seu nome:",
+        "RUS": "Для продолжения нам необходимо зарегистрировать вас. Пожалуйста, введите ваше имя:"
+    },
+    
     # Master or time selection
     "select_master_or_time": {
         "UKR": "Оберіть, як ви хочете записатись:",
@@ -56,6 +64,14 @@ TRANSLATIONS = {
         "ENG": "Choose a master:",
         "POR": "Escolha um mestre:",
         "RUS": "Выберите мастера:"
+    },
+    
+    # Day selection
+    "select_day": {
+        "UKR": "Оберіть день для запису:",
+        "ENG": "Choose a day for your appointment:",
+        "POR": "Escolha um dia para o seu agendamento:",
+        "RUS": "Выберите день для записи:"
     },
     
     # No masters available

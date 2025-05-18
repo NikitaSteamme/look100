@@ -1,0 +1,4 @@
+-- Добавление новых полей в таблицу client
+ALTER TABLE client ADD COLUMN IF NOT EXISTS lang VARCHAR(10) NOT NULL DEFAULT 'ru';
+ALTER TABLE client ADD COLUMN IF NOT EXISTS time_coeff FLOAT NOT NULL DEFAULT 1.0;
+ALTER TABLE client ADD COLUMN IF NOT EXISTS is_first_visit BOOLEAN NOT NULL DEFAULT true;

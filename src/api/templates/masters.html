@@ -277,19 +277,35 @@
         $('.delete-master').click(function() {
             if (confirm('Вы уверены, что хотите удалить этого мастера?')) {
                 const masterId = $(this).data('id');
+                const row = $(this).closest('tr');
                 
                 $.ajax({
                     url: `/api/masters/${masterId}`,
                     type: 'DELETE',
+                    contentType: 'application/json',
+                    dataType: 'json',
                     beforeSend: function(xhr) {
                         xhr.setRequestHeader('Authorization', 'Bearer ' + localStorage.getItem('token'));
                     },
-                    success: function() {
-                        alert('Мастер успешно удален!');
-                        location.reload();
+                    success: function(response) {
+                        if (response.success) {
+                            alert('Мастер успешно удален!');
+                            // Удаляем строку из таблицы без перезагрузки страницы
+                            row.fadeOut(400, function() {
+                                row.remove();
+                            });
+                        } else {
+                            alert('Ошибка: ' + response.message);
+                        }
                     },
                     error: function(xhr) {
-                        alert('Ошибка: ' + xhr.responseText);
+                        try {
+                            const response = JSON.parse(xhr.responseText);
+                            alert('Ошибка: ' + response.message);
+                        } catch (e) {
+                            alert('Ошибка при удалении мастера. Пожалуйста, попробуйте еще раз.');
+                        }
+                        console.error('Error deleting master:', xhr.responseText);
                     }
                 });
             }

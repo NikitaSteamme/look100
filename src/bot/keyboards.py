@@ -17,15 +17,48 @@ def language_keyboard():
     return builder.as_markup()
 
 
-def section_keyboard(sections: List[Dict[str, Any]], lang: str):
+def section_keyboard(sections_data, lang):
     """Create keyboard for section selection"""
     builder = InlineKeyboardBuilder()
     
-    for section in sections:
+    # Проверяем формат данных
+    # Если это ответ API, извлекаем секции из поля data
+    if isinstance(sections_data, dict) and 'data' in sections_data:
+        sections = sections_data['data']
+    else:
+        sections = sections_data
+    
+    # Если sections пустой или не является списком, возвращаем только кнопку "Назад"
+    if not sections or not isinstance(sections, list):
+        # Add back button with appropriate text based on language
+        back_text = {
+            "UKR": "⬅️ Назад",
+            "ENG": "⬅️ Back",
+            "POR": "⬅️ Voltar",
+            "RUS": "⬅️ Назад"
+        }.get(lang, "⬅️ Back")
+        
         builder.add(InlineKeyboardButton(
-            text=section["name"],
-            callback_data=f"section:{section['id']}"
+            text=back_text,
+            callback_data="back:language"
         ))
+        return builder.as_markup()
+    
+    for section in sections:
+        # Получаем имя секции в зависимости от формата данных
+        if isinstance(section, dict):
+            # Если есть поле name_{lang}, используем его
+            section_name = section.get(f"name_{lang}") or section.get("name") or section.get("name_ru", f"Раздел {section.get('id', '?')}")
+            section_id = section.get('id')
+        else:
+            # Если section не словарь, пропускаем его
+            continue
+        
+        if section_id is not None:
+            builder.add(InlineKeyboardButton(
+                text=section_name,
+                callback_data=f"section:{section_id}"
+            ))
     
     # Add back button with appropriate text based on language
     back_text = {
@@ -44,17 +77,43 @@ def section_keyboard(sections: List[Dict[str, Any]], lang: str):
     return builder.as_markup()
 
 
-def procedure_keyboard(procedures: List[Dict[str, Any]], selected_procedures: List[int], lang: str):
+def procedure_keyboard(procedures_data, selected_procedures: List[int], lang: str):
     """Create keyboard for procedure selection with checkboxes"""
     builder = InlineKeyboardBuilder()
     
-    for procedure in procedures:
-        # Add checkbox if procedure is selected
-        prefix = "✅ " if procedure["id"] in selected_procedures else ""
-        builder.add(InlineKeyboardButton(
-            text=f"{prefix}{procedure['name']} ({procedure['base_price']}₴)",
-            callback_data=f"procedure:{procedure['id']}"
-        ))
+    # Проверяем формат данных
+    # Если это ответ API, извлекаем процедуры из поля data
+    if isinstance(procedures_data, dict) and 'data' in procedures_data:
+        procedures = procedures_data['data']
+    else:
+        procedures = procedures_data
+    
+    # Если procedures пустой или не является списком, возвращаем только кнопки навигации
+    if not procedures or not isinstance(procedures, list):
+        # Добавляем кнопки навигации ниже
+        pass
+    else:
+        for procedure in procedures:
+            if not isinstance(procedure, dict):
+                continue
+                
+            # Получаем ID процедуры
+            procedure_id = procedure.get('id')
+            if procedure_id is None:
+                continue
+                
+            # Получаем имя процедуры в зависимости от языка
+            procedure_name = procedure.get(f"name_{lang}") or procedure.get("name") or procedure.get("name_ru", f"Процедура {procedure_id}")
+            
+            # Получаем цену процедуры
+            base_price = procedure.get('base_price', 0)
+            
+            # Add checkbox if procedure is selected
+            prefix = "✅ " if procedure_id in selected_procedures else ""
+            builder.add(InlineKeyboardButton(
+                text=f"{prefix}{procedure_name} ({base_price}₴)",
+                callback_data=f"procedure:{procedure_id}"
+            ))
     
     # Add next and back buttons with appropriate text based on language
     next_text = {
@@ -116,14 +175,47 @@ def master_or_time_keyboard(lang: str):
     return builder.as_markup()
 
 
-def master_selection_keyboard(masters: List[Dict[str, Any]], lang: str):
+def master_selection_keyboard(masters_data, lang: str):
     """Create keyboard for master selection"""
     builder = InlineKeyboardBuilder()
     
-    for master in masters:
+    # Проверяем формат данных
+    if isinstance(masters_data, dict) and 'data' in masters_data:
+        masters = masters_data['data']
+    else:
+        masters = masters_data
+    
+    # Если masters пустой или не является списком, возвращаем только кнопку "Назад"
+    if not masters or not isinstance(masters, list):
+        # Добавляем кнопку "Назад"
+        back_text = {
+            "UKR": "⬅️ Назад",
+            "ENG": "⬅️ Back",
+            "POR": "⬅️ Voltar",
+            "RUS": "⬅️ Назад"
+        }.get(lang, "⬅️ Back")
+        
         builder.add(InlineKeyboardButton(
-            text=master["name"],
-            callback_data=f"master:{master['id']}"
+            text=back_text,
+            callback_data="back:master_or_time"
+        ))
+        return builder.as_markup()
+    
+    for master in masters:
+        if not isinstance(master, dict):
+            continue
+            
+        # Получаем ID мастера
+        master_id = master.get('id')
+        if master_id is None:
+            continue
+            
+        # Получаем имя мастера в зависимости от языка
+        master_name = master.get(f"name_{lang}") or master.get("name") or master.get("name_ru", f"Мастер {master_id}")
+        
+        builder.add(InlineKeyboardButton(
+            text=master_name,
+            callback_data=f"master:{master_id}"
         ))
     
     # Add back button with appropriate text based on language
@@ -142,59 +234,50 @@ def master_selection_keyboard(masters: List[Dict[str, Any]], lang: str):
     builder.adjust(1)
     return builder.as_markup()
 
-
-def time_selection_keyboard(slots: List[datetime], current_page: int, total_pages: int, lang: str):
-    """Create keyboard for time selection with pagination"""
+def time_selection_keyboard(slots: List[datetime], page: int, items_per_page: int, lang: str):
+    """Create keyboard for time selection"""
     builder = InlineKeyboardBuilder()
     
-    for slot in slots:
-        # Format time as HH:MM
+    # Calculate start and end indices for the current page
+    start_idx = page * items_per_page
+    end_idx = min(start_idx + items_per_page, len(slots))
+    
+    # Add time buttons
+    for slot in slots[start_idx:end_idx]:
         time_str = slot.strftime("%H:%M")
-        # Format date based on language
-        if lang == "UKR":
-            date_str = slot.strftime("%d.%m.%Y")
-        elif lang == "ENG":
-            date_str = slot.strftime("%m/%d/%Y")
-        else:
-            date_str = slot.strftime("%d.%m.%Y")
-            
         builder.add(InlineKeyboardButton(
-            text=f"{date_str} {time_str}",
+            text=time_str,
             callback_data=f"time:{slot.isoformat()}"
         ))
     
-    # Navigation buttons
-    nav_row = []
-    
-    # Previous page button
-    if current_page > 0:
+    # Add navigation buttons if needed
+    if page > 0:
         prev_text = {
-            "UKR": "⬅️ Попередні",
-            "ENG": "⬅️ Previous",
-            "POR": "⬅️ Anterior",
-            "RUS": "⬅️ Предыдущие"
-        }.get(lang, "⬅️ Previous")
+            "UKR": "⬅️ Попередня сторінка",
+            "ENG": "⬅️ Previous page",
+            "POR": "⬅️ Página anterior",
+            "RUS": "⬅️ Предыдущая страница"
+        }.get(lang, "⬅️ Previous page")
         
-        nav_row.append(InlineKeyboardButton(
+        builder.add(InlineKeyboardButton(
             text=prev_text,
-            callback_data=f"page:{current_page-1}"
+            callback_data=f"page:{page-1}"
         ))
     
-    # Next page button
-    if current_page < total_pages - 1:
+    if end_idx < len(slots):
         next_text = {
-            "UKR": "➡️ Наступні",
-            "ENG": "➡️ Next",
-            "POR": "➡️ Próximo",
-            "RUS": "➡️ Следующие"
-        }.get(lang, "➡️ Next")
+            "UKR": "Наступна сторінка ➡️",
+            "ENG": "Next page ➡️",
+            "POR": "Próxima página ➡️",
+            "RUS": "Следующая страница ➡️"
+        }.get(lang, "Next page ➡️")
         
-        nav_row.append(InlineKeyboardButton(
+        builder.add(InlineKeyboardButton(
             text=next_text,
-            callback_data=f"page:{current_page+1}"
+            callback_data=f"page:{page+1}"
         ))
     
-    # Back button
+    # Add back button with appropriate text based on language
     back_text = {
         "UKR": "⬅️ Назад",
         "ENG": "⬅️ Back",
@@ -202,15 +285,80 @@ def time_selection_keyboard(slots: List[datetime], current_page: int, total_page
         "RUS": "⬅️ Назад"
     }.get(lang, "⬅️ Back")
     
-    builder.row(*nav_row)
-    builder.row(InlineKeyboardButton(
+    builder.add(InlineKeyboardButton(
         text=back_text,
-        callback_data="back:master_or_time"
+        callback_data="back:day"
     ))
     
     builder.adjust(1)
     return builder.as_markup()
 
+def day_selection_keyboard(days: List[datetime], page: int, lang: str, has_more: bool = False):
+    """Create keyboard for day selection"""
+    builder = InlineKeyboardBuilder()
+    
+    # Add day buttons
+    for day in days:
+        # Format day based on language
+        if lang in ["UKR", "RUS"]:
+            # Формат для украинского и русского
+            day_names = {
+                0: "Пн",
+                1: "Вт",
+                2: "Ср",
+                3: "Чт",
+                4: "Пт",
+                5: "Сб",
+                6: "Вс"
+            }
+            day_str = f"{day_names[day.weekday()]}, {day.day:02d}.{day.month:02d}"
+        else:
+            # Формат для английского и португальского
+            day_names = {
+                0: "Mon",
+                1: "Tue",
+                2: "Wed",
+                3: "Thu",
+                4: "Fri",
+                5: "Sat",
+                6: "Sun"
+            }
+            day_str = f"{day_names[day.weekday()]}, {day.day:02d}/{day.month:02d}"
+        
+        builder.add(InlineKeyboardButton(
+            text=day_str,
+            callback_data=f"day:{day.isoformat()}"
+        ))
+    
+    # Add "Later" button if there are more days
+    if has_more:
+        later_text = {
+            "UKR": "Пізніше ➡️",
+            "ENG": "Later ➡️",
+            "POR": "Mais tarde ➡️",
+            "RUS": "Позже ➡️"
+        }.get(lang, "Later ➡️")
+        
+        builder.add(InlineKeyboardButton(
+            text=later_text,
+            callback_data=f"later:{page+1}"
+        ))
+    
+    # Add back button with appropriate text based on language
+    back_text = {
+        "UKR": "⬅️ Назад",
+        "ENG": "⬅️ Back",
+        "POR": "⬅️ Voltar",
+        "RUS": "⬅️ Назад"
+    }.get(lang, "⬅️ Back")
+    
+    builder.add(InlineKeyboardButton(
+        text=back_text,
+        callback_data="back:master"
+    ))
+    
+    builder.adjust(1)
+    return builder.as_markup()
 
 def confirmation_keyboard(lang: str):
     """Create keyboard for appointment confirmation"""
